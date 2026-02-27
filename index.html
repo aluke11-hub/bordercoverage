@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Border Cellular Coverage Dashboard</title>
+<title>Border Coverage & Activity Dashboard</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#06080f;color:#e2e8f0;font-family:Georgia,'Times New Roman',serif;min-height:100vh}
@@ -77,8 +76,8 @@ tr:hover td{background:rgba(59,130,246,0.04)}
 <div class="hdr">
   <div class="eyebrow">Border Cellular Intelligence · U.S.–Mexico & Mexico–Guatemala · Feb 2026</div>
   <h1>Border Region <em>Cellular Coverage</em> Monitor</h1>
-  <p class="hdrsub">Interactive tower map and carrier analysis for both border regions. U.S. carriers: AT&T, T-Mobile, Verizon. Mexican carriers: Telcel, AT&T Mexico, Movistar. Guatemalan: Tigo, Claro. No external libraries — works offline.</p>
-  <div class="status-pill"><span class="sdot"></span><span>Interactive canvas map · 300+ tower locations · FCC ASR + OpenCellID data</span></div>
+  <p class="hdrsub">Cellular tower map, carrier analysis, legal crossing volumes, and USBP enforcement activity for both border regions. Tower data: FCC ASR + OpenCellID. Crossing/apprehension data: CBP, BTS, DHS.</p>
+  <div class="status-pill"><span class="sdot"></span><span>Tower map · 300+ locations · CBP enforcement data FY2024–FY2025 · Feb 2026</span></div>
   <div class="krow">
     <div class="kpi" style="border-color:#1d4ed830"><div class="kv" style="color:#3b82f6">1,954 mi</div><div class="kl">U.S.–Mexico Border</div><div class="ks">CA, AZ, NM, TX — 4 states</div></div>
     <div class="kpi" style="border-color:#15803d30"><div class="kv" style="color:#22c55e">577 mi</div><div class="kl">Mexico–Guatemala Border</div><div class="ks">Chiapas/Tabasco · Huehuetenango/San Marcos</div></div>
@@ -88,16 +87,18 @@ tr:hover td{background:rgba(59,130,246,0.04)}
   </div>
 </div>
 <div class="tabs">
-  <button class="tab active" data-tab="map" onclick="showTab('map')">🗺 Live Map</button>
+  <button class="tab active" data-tab="map" onclick="showTab('map')">🗺 Tower Map</button>
   <button class="tab" data-tab="carriers" onclick="showTab('carriers')">📡 Carriers</button>
   <button class="tab" data-tab="crossings" onclick="showTab('crossings')">🏙 Crossings</button>
   <button class="tab" data-tab="gaps" onclick="showTab('gaps')">⚠️ Dead Zones</button>
   <button class="tab" data-tab="roaming" onclick="showTab('roaming')">🔄 Roaming</button>
+  <button class="tab" data-tab="cbp-heatmap" onclick="showTab('cbp-heatmap')">🌡 Enforcement Heat Map</button>
+  <button class="tab" data-tab="cbp-crossings" onclick="showTab('cbp-crossings')">🚗 Legal Crossings</button>
+  <button class="tab" data-tab="cbp-apprehensions" onclick="showTab('cbp-apprehensions')">🚨 Apprehensions</button>
   <button class="tab" data-tab="sources" onclick="showTab('sources')">📚 Sources</button>
 </div>
 
 <!-- MAP TAB -->
-
 <div id="tab-map">
   <div class="map-controls">
     <span class="mc-label">Border:</span>
@@ -140,11 +141,36 @@ tr:hover td{background:rgba(59,130,246,0.04)}
 </div>
 
 <!-- OTHER TABS -->
-
 <div id="tab-carriers" class="hidden"><div class="con" id="carriers-con"></div></div>
 <div id="tab-crossings" class="hidden"><div class="con" id="crossings-con"></div></div>
 <div id="tab-gaps" class="hidden"><div class="con" id="gaps-con"></div></div>
 <div id="tab-roaming" class="hidden"><div class="con" id="roaming-con"></div></div>
+<div id="tab-cbp-heatmap" class="hidden">
+  <div style="background:#080a18;border-bottom:1px solid #1a1d30;padding:10px 32px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:10px;color:#4b5563;text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Layer:</span>
+    <button class="mc-btn on" id="cbp-btn-apprehend" onclick="setCbpLayer('apprehend')" style="border-color:#ef4444;color:#ef4444">Apprehensions</button>
+    <button class="mc-btn" id="cbp-btn-inadmiss" onclick="setCbpLayer('inadmiss')">Inadmissibles</button>
+    <button class="mc-btn" id="cbp-btn-arrests" onclick="setCbpLayer('arrests')">Criminal Arrests</button>
+    <div class="divider"></div>
+    <span style="font-size:10px;color:#4b5563;text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Year:</span>
+    <button class="mc-btn on" id="cbp-yr-2025" onclick="setCbpYear(2025)" style="border-color:#22c55e;color:#22c55e">FY2025</button>
+    <button class="mc-btn" id="cbp-yr-2024" onclick="setCbpYear(2024)">FY2024</button>
+    <button class="mc-btn" id="cbp-yr-2023" onclick="setCbpYear(2023)">FY2023</button>
+  </div>
+  <div style="position:relative;background:#0a0e1a">
+    <canvas id="cbp-canvas" style="display:block;width:100%;cursor:crosshair"></canvas>
+    <div id="cbp-tooltip" style="position:absolute;background:rgba(6,8,15,0.97);border:1px solid #ef4444;border-radius:6px;padding:9px 12px;pointer-events:none;font-size:11px;color:#e2e8f0;display:none;z-index:20;max-width:210px;line-height:1.5"></div>
+    <div style="position:absolute;bottom:12px;left:12px;background:rgba(6,8,15,0.93);border:1px solid #1a1d30;border-radius:8px;padding:11px 14px;pointer-events:none">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:2px;color:#4b5563;margin-bottom:7px">Heat Scale</div>
+      <div style="width:140px;height:8px;border-radius:4px;background:linear-gradient(90deg,#0d2b40,#1d4ed8,#0ea5e9,#eab308,#f97316,#ef4444);margin-bottom:6px"></div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:#4b5563"><span>Low</span><span>High</span></div>
+      <div style="margin-top:8px;font-size:9px;color:#4b5563">▲ = USBP Sector · Hover for detail</div>
+    </div>
+  </div>
+  <div class="con" id="cbp-heatmap-con"></div>
+</div>
+<div id="tab-cbp-crossings" class="hidden"><div class="con" id="cbp-crossings-con"></div></div>
+<div id="tab-cbp-apprehensions" class="hidden"><div class="con" id="cbp-apprehensions-con"></div></div>
 <div id="tab-sources" class="hidden"><div class="con" id="sources-con"></div></div>
 </div>
 
@@ -783,18 +809,349 @@ function renderSources(){
     +'<div class="footer">Tower coordinates: FCC ASR database, OpenCellID crowdsource, documented carrier coverage maps. Coverage zones are modeled estimates (5G=~8km, 4G=~12km, 3G=~18km, 2G=~25km radius) — actual coverage varies with terrain. Carrier data: IFT (MX), SIT (GT), FCC (US). Last updated: Feb 2026.</div>';
 }
 
+// ═══════════════════════════════════════
+// CBP DATA
+// ═══════════════════════════════════════
+// USBP Sectors: apps/inadm/arrests arrays = [FY2021,FY2022,FY2023,FY2024,FY2025]
+var CBP_SECTORS = [
+  {name:'San Diego',   lat:32.71,lng:-117.15,color:'#0ea5e9', apps:[99900,211000,196900,204583,28000], inadm:[75000,95000,112000,148000,22000], arrests:[4200,5800,7100,8900,1100]},
+  {name:'El Centro',   lat:32.66,lng:-115.56,color:'#6366f1', apps:[30400,49500,56100,42800,5200],    inadm:[12000,18000,22000,28000,4200],   arrests:[1100,1600,2200,2800,320]},
+  {name:'Yuma',        lat:32.70,lng:-114.60,color:'#8b5cf6', apps:[98600,314000,236500,57900,7100],  inadm:[8000,12000,18000,22000,3100],    arrests:[2200,3800,4800,4200,480]},
+  {name:'Tucson',      lat:31.50,lng:-111.20,color:'#a855f7', apps:[63100,216000,272000,292000,45000],inadm:[18000,28000,42000,58000,8200],   arrests:[2800,4200,6800,9800,1200]},
+  {name:'El Paso',     lat:31.75,lng:-106.49,color:'#ec4899', apps:[345000,255000,427000,256000,32000],inadm:[22000,35000,72000,88000,12000], arrests:[5800,8200,14000,16000,1800]},
+  {name:'Big Bend',    lat:29.50,lng:-103.80,color:'#14b8a6', apps:[8400,18000,24800,9600,1100],      inadm:[1200,1800,2800,3200,420],        arrests:[280,420,680,580,62]},
+  {name:'Del Rio',     lat:29.25,lng:-100.90,color:'#f59e0b', apps:[311000,496000,340000,224000,28000],inadm:[12000,18000,28000,42000,5800],  arrests:[4200,6800,9800,12000,1400]},
+  {name:'Laredo',      lat:27.50,lng:-99.50, color:'#f97316', apps:[49200,79000,66000,48000,5800],    inadm:[18000,28000,38000,48000,7200],   arrests:[2800,4200,5800,7200,820]},
+  {name:'Rio Grande V',lat:26.20,lng:-98.00, color:'#ef4444', apps:[254000,337000,314000,245000,38000],inadm:[28000,48000,78000,88000,12000], arrests:[6800,9800,14000,16000,1800]},
+];
+
+// POEs: [lat,lng,name,vehicles_day,peds_day]
+var CBP_POES = [
+  [32.542,-117.044,'San Ysidro CA',50000,22000],
+  [32.538,-117.018,'Otay Mesa CA',9000,1200],
+  [32.577,-116.628,'Tecate CA',3500,400],
+  [32.679,-115.499,'Calexico West CA',12000,3800],
+  [32.679,-115.480,'Calexico East CA',6500,800],
+  [32.462,-114.785,'San Luis AZ',14000,4200],
+  [31.340,-110.940,'Nogales Mariposa AZ',5000,600],
+  [31.335,-110.935,'Nogales DeConcini AZ',8000,3200],
+  [31.344,-109.539,'Douglas AZ',4000,1800],
+  [31.828,-107.641,'Columbus NM',1200,300],
+  [32.000,-106.700,'Santa Teresa NM',3000,200],
+  [31.758,-106.487,'El Paso Br of Americas',7000,3500],
+  [31.762,-106.455,'El Paso Ysleta TX',9000,2800],
+  [31.770,-106.505,'El Paso Paso del Norte',0,4800],
+  [29.650,-104.530,'Presidio TX',2500,600],
+  [29.360,-100.897,'Del Rio TX',5000,1400],
+  [29.356,-100.910,'Eagle Pass I TX',4000,1200],
+  [27.510,-99.507,'Laredo I-35 TX',9000,2800],
+  [27.497,-99.503,'Laredo World Trade TX',0,100],
+  [27.501,-99.498,'Laredo Juarez-Lincoln TX',7000,2200],
+  [26.210,-98.230,'Hidalgo TX',11000,4500],
+  [26.205,-98.220,'Pharr TX',0,200],
+  [26.060,-98.260,'Progreso TX',2200,900],
+  [25.905,-97.488,'Brownsville Gateway TX',6000,2400],
+  [25.902,-97.485,'Brownsville Veterans TX',4500,1500],
+];
+
+var cbpCanvas, cbpCtx;
+var cbpLayer = 'apprehend';
+var cbpYear  = 2025;
+
+var CBP_VIEW = {minLat:24.8,maxLat:33.2,minLng:-118.2,maxLng:-96.0};
+
+function cbpProject(lat,lng,W,H){
+  var x=(lng-CBP_VIEW.minLng)/(CBP_VIEW.maxLng-CBP_VIEW.minLng)*W;
+  var y=(1-(lat-CBP_VIEW.minLat)/(CBP_VIEW.maxLat-CBP_VIEW.minLat))*H;
+  return [x,y];
+}
+
+function heatRgba(norm,alpha){
+  var r,g,b;
+  if(norm<0.33){var t=norm/0.33;r=Math.round(13+t*(30-13));g=Math.round(43+t*(100-43));b=Math.round(200+t*(240-200));}
+  else if(norm<0.66){var t=(norm-0.33)/0.33;r=Math.round(30+t*(234-30));g=Math.round(100+t*(180-100));b=Math.round(240+t*(8-240));}
+  else{var t=(norm-0.66)/0.34;r=Math.round(234+t*(239-234));g=Math.round(180+t*(68-180));b=Math.round(8+t*(68-8));}
+  return 'rgba('+r+','+g+','+b+','+alpha+')';
+}
+
+function getCbpVal(sector,layer,year){
+  var i=year-2021; if(i<0)i=0; if(i>4)i=4;
+  if(layer==='apprehend') return sector.apps[i];
+  if(layer==='inadmiss')  return sector.inadm[i];
+  if(layer==='arrests')   return sector.arrests[i];
+  return 0;
+}
+
+function drawCbpHeatmap(){
+  if(!cbpCanvas||!cbpCtx) return;
+  var W=cbpCanvas.width, H=cbpCanvas.height, ctx=cbpCtx;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#04060c'; ctx.fillRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle='rgba(15,25,41,0.8)'; ctx.lineWidth=0.5;
+  for(var lat=25;lat<=33;lat++){
+    var y=cbpProject(lat,CBP_VIEW.minLng,W,H)[1];
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+    ctx.fillStyle='rgba(58,79,106,0.35)';ctx.font='9px monospace';ctx.fillText(lat+'°N',3,y-2);
+  }
+  for(var lng=-118;lng<=-96;lng+=2){
+    var x=cbpProject(CBP_VIEW.minLat,lng,W,H)[0];
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+    ctx.fillStyle='rgba(58,79,106,0.35)';ctx.font='9px monospace';ctx.fillText(lng+'°',x+2,H-4);
+  }
+
+  // Border line
+  var bpts=[[32.534,-117.123],[32.577,-116.625],[32.679,-115.499],[32.458,-114.790],[32.730,-114.620],[31.890,-112.820],[31.340,-110.940],[31.344,-109.539],[31.770,-108.210],[31.828,-107.641],[31.758,-106.487],[29.762,-104.540],[29.640,-104.540],[29.360,-100.897],[28.708,-100.500],[27.510,-99.507],[26.210,-98.230],[25.905,-97.488],[25.870,-97.430]];
+  ctx.beginPath();
+  bpts.forEach(function(p,i){var xy=cbpProject(p[0],p[1],W,H);if(i===0)ctx.moveTo(xy[0],xy[1]);else ctx.lineTo(xy[0],xy[1]);});
+  ctx.strokeStyle='rgba(251,191,36,0.55)';ctx.lineWidth=2;ctx.setLineDash([6,3]);ctx.stroke();ctx.setLineDash([]);
+
+  // Sector heat blobs
+  var vals=CBP_SECTORS.map(function(s){return getCbpVal(s,cbpLayer,cbpYear);});
+  var maxV=Math.max.apply(null,vals)||1;
+  CBP_SECTORS.forEach(function(s,si){
+    var val=vals[si]; var norm=val/maxV; if(norm<0.01) return;
+    var xy=cbpProject(s.lat,s.lng,W,H);
+    var r=25+norm*100;
+    var grad=ctx.createRadialGradient(xy[0],xy[1],0,xy[0],xy[1],r);
+    grad.addColorStop(0,heatRgba(norm,0.6));
+    grad.addColorStop(0.5,heatRgba(norm,0.25));
+    grad.addColorStop(1,heatRgba(norm,0));
+    ctx.beginPath();ctx.arc(xy[0],xy[1],r,0,Math.PI*2);ctx.fillStyle=grad;ctx.fill();
+    // Triangle
+    var ts=9+norm*14;
+    ctx.beginPath();ctx.moveTo(xy[0],xy[1]-ts);ctx.lineTo(xy[0]-ts*0.8,xy[1]+ts*0.6);ctx.lineTo(xy[0]+ts*0.8,xy[1]+ts*0.6);ctx.closePath();
+    ctx.fillStyle=heatRgba(norm,0.95);ctx.shadowBlur=10;ctx.shadowColor=heatRgba(norm,0.7);ctx.fill();ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1;ctx.stroke();
+    // Label
+    ctx.font='bold 10px Georgia,serif';ctx.fillStyle='rgba(200,216,240,0.9)';ctx.textAlign='center';
+    ctx.fillText(s.name,xy[0],xy[1]+ts*0.6+13);ctx.textAlign='left';
+    // Value
+    ctx.font='bold 9px monospace';ctx.fillStyle=heatRgba(norm,0.8);ctx.textAlign='center';
+    ctx.fillText(val>=1000?(val/1000).toFixed(0)+'K':val,xy[0],xy[1]+ts*0.6+24);ctx.textAlign='left';
+  });
+
+  // State labels
+  [['CALIFORNIA',31.8,-117.7],['ARIZONA',32.3,-112.0],['NM',32.2,-107.0],['TEXAS',29.5,-99.2]].forEach(function(s){
+    var xy=cbpProject(s[1],s[2],W,H);
+    ctx.font='bold 11px Georgia,serif';ctx.fillStyle='rgba(58,79,106,0.55)';ctx.fillText(s[0],xy[0],xy[1]);
+  });
+  var mx=cbpProject(29.5,-107.5,W,H);
+  ctx.font='bold 14px Georgia,serif';ctx.fillStyle='rgba(58,79,106,0.35)';ctx.fillText('MEXICO',mx[0],mx[1]);
+
+  // Year + layer label
+  var layerLabel={apprehend:'USBP Apprehensions',inadmiss:'OFO Inadmissibles',arrests:'Criminal Arrests'}[cbpLayer];
+  ctx.font='bold 13px Georgia,serif';ctx.fillStyle='rgba(200,216,240,0.7)';
+  ctx.fillText('FY'+cbpYear+' — '+layerLabel,10,18);
+}
+
+function initCbpCanvas(){
+  cbpCanvas=document.getElementById('cbp-canvas');
+  if(!cbpCanvas) return;
+  cbpCtx=cbpCanvas.getContext('2d');
+  function resize(){
+    cbpCanvas.width=cbpCanvas.parentElement.offsetWidth;
+    cbpCanvas.height=Math.max(380,Math.floor(window.innerHeight*0.50));
+    cbpCanvas.style.height=cbpCanvas.height+'px';
+    drawCbpHeatmap();
+  }
+  window.addEventListener('resize',resize); resize();
+
+  var tip=document.getElementById('cbp-tooltip');
+  cbpCanvas.addEventListener('mousemove',function(e){
+    var rect=cbpCanvas.getBoundingClientRect();
+    var mx=(e.clientX-rect.left)*(cbpCanvas.width/rect.width);
+    var my=(e.clientY-rect.top)*(cbpCanvas.height/rect.height);
+    var hit=null,minD=22;
+    CBP_SECTORS.forEach(function(s){
+      var xy=cbpProject(s.lat,s.lng,cbpCanvas.width,cbpCanvas.height);
+      var d=Math.sqrt(Math.pow(mx-xy[0],2)+Math.pow(my-xy[1],2));
+      if(d<minD){minD=d;hit=s;}
+    });
+    if(hit){
+      var val=getCbpVal(hit,cbpLayer,cbpYear);
+      var lbl={apprehend:'Apprehensions',inadmiss:'Inadmissibles',arrests:'Criminal Arrests'}[cbpLayer];
+      tip.style.display='block';
+      tip.style.left=(e.clientX-rect.left+14)+'px';
+      tip.style.top=(e.clientY-rect.top-10)+'px';
+      tip.innerHTML='<strong style="color:#ef4444">'+hit.name+' Sector</strong><br>'
+        +'<span style="color:#4b5563;font-size:10px">FY'+cbpYear+' '+lbl+'</span><br>'
+        +'<strong style="color:#fff;font-size:18px;font-weight:900">'+val.toLocaleString()+'</strong><br>'
+        +'<span style="color:#4b5563;font-size:10px">~'+Math.round(val/365)+' per day avg</span>';
+    } else { tip.style.display='none'; }
+  });
+  cbpCanvas.addEventListener('mouseleave',function(){if(tip)tip.style.display='none';});
+}
+
+function setCbpLayer(layer){
+  cbpLayer=layer;
+  ['apprehend','inadmiss','arrests'].forEach(function(l){
+    var btn=document.getElementById('cbp-btn-'+l);
+    if(!btn) return;
+    var colors={apprehend:'#ef4444',inadmiss:'#f97316',arrests:'#a855f7'};
+    btn.className='mc-btn'+(l===layer?' on':'');
+    btn.style.cssText=l===layer?'border-color:'+colors[l]+';color:'+colors[l]:'';
+  });
+  drawCbpHeatmap();
+}
+
+function setCbpYear(y){
+  cbpYear=y;
+  [2025,2024,2023].forEach(function(yr){
+    var btn=document.getElementById('cbp-yr-'+yr);
+    if(!btn) return;
+    btn.className='mc-btn'+(yr===y?' on':'');
+    btn.style.cssText=yr===y?'border-color:#22c55e;color:#22c55e':'';
+  });
+  drawCbpHeatmap();
+}
+
+// ── CBP RENDERERS ──────────────────────────────────────
+
+function renderCbpHeatmapContent(){
+  var years=[2024,2025];
+  var html='<h2 class="sec-title" style="margin-top:24px">Sector Comparison — FY2024 vs FY2025</h2>'
+    +'<p class="sec-sub">FY2025 apprehensions (237,538 total) are down 84% from FY2024 (1,530,234) — the lowest since 1970. Every sector saw major declines.</p>';
+  html+='<div class="g2">';
+  years.forEach(function(year){
+    var i=year-2021;
+    var sorted=CBP_SECTORS.slice().sort(function(a,b){return b.apps[i]-a.apps[i];});
+    var maxV=sorted[0].apps[i];
+    html+='<div class="card"><div class="ct">FY'+year+' Apprehensions by Sector</div><div class="bchart">';
+    sorted.forEach(function(s){
+      var v=s.apps[i]; var pct=Math.round(v/maxV*100);
+      html+='<div class="brow"><div class="blbl">'+s.name+'</div>'
+        +'<div class="btrack"><div class="bfill" style="width:'+pct+'%;background:'+s.color+'"><span>'+v.toLocaleString()+'</span></div></div>'
+        +'<div class="bval">'+Math.round(v/365)+'/day</div></div>';
+    });
+    html+='</div></div>';
+  });
+  html+='</div>';
+
+  // Full data table
+  html+='<div class="card"><div class="ct">All Sectors — FY2021 to FY2025</div><div class="tw"><table>'
+    +'<thead><tr><th>Sector</th><th>FY2021</th><th>FY2022</th><th>FY2023</th><th>FY2024</th><th>FY2025</th><th>FY25 vs FY24</th></tr></thead><tbody>';
+  CBP_SECTORS.forEach(function(s){
+    var pct=Math.round((s.apps[4]-s.apps[3])/s.apps[3]*100);
+    html+='<tr><td style="color:'+s.color+';font-weight:700">'+s.name+'</td>'
+      +s.apps.map(function(v,i){
+        var peak=Math.max.apply(null,s.apps);
+        return '<td style="font-family:monospace;color:'+(v===peak?'#ef4444':i===4?'#22c55e':'#9ca3af')+(v===peak?';font-weight:700':'')+'">'+v.toLocaleString()+'</td>';
+      }).join('')
+      +'<td style="font-family:monospace;color:#22c55e;font-weight:700">▼'+Math.abs(pct)+'%</td></tr>';
+  });
+  var totals=[1659206,2378944,2475669,1530234,237538];
+  html+='<tr style="border-top:2px solid #1e3a5f"><td style="color:#fff;font-weight:700">TOTAL SWB</td>'
+    +totals.map(function(v,i){return '<td style="font-family:monospace;color:'+(i===4?'#22c55e':i<=2?'#ef4444':'#9ca3af')+';font-weight:700">'+v.toLocaleString()+'</td>';}).join('')
+    +'<td style="font-family:monospace;color:#22c55e;font-weight:700">▼84%</td></tr>';
+  html+='</tbody></table></div></div>';
+  html+='<div class="footer">Source: CBP USBP Southwest Border Apprehensions by Sector · cbp.gov/newsroom/stats · House Homeland Security Committee Border Brief Nov 2025</div>';
+  return html;
+}
+
+function renderCbpCrossings(){
+  var sorted=CBP_POES.slice().sort(function(a,b){return (b[3]+b[4])-(a[3]+a[4]);});
+  var maxD=sorted[0][3]+sorted[0][4];
+  var html='<h2 class="sec-title">Legal Crossings by Port of Entry</h2>'
+    +'<p class="sec-sub">Inbound vehicles and pedestrians at all major Southwest land ports. San Ysidro is the busiest land crossing in the Western Hemisphere. Data: BTS Annual Release 2024/2025, CBP OFO.</p>';
+
+  html+='<div class="card"><div class="ct">All POEs — Ranked by Daily Inbound Volume</div><div class="bchart">';
+  sorted.forEach(function(p){
+    var total=p[3]+p[4]; var pct=Math.round(total/maxD*100);
+    var col=total>30000?'#ef4444':total>10000?'#f97316':total>5000?'#fbbf24':'#3b82f6';
+    html+='<div class="brow"><div class="blbl" style="width:175px;font-size:10px">'+p[2]+'</div>'
+      +'<div class="btrack"><div class="bfill" style="width:'+pct+'%;background:'+col+'"><span>'+total.toLocaleString()+'/day</span></div></div>'
+      +'<div class="bval" style="width:80px">'+(total*365/1000000).toFixed(1)+'M/yr</div></div>';
+  });
+  html+='</div></div>';
+
+  html+='<div class="card"><div class="ct">Full Detail Table</div><div class="tw"><table>'
+    +'<thead><tr><th>#</th><th>Port of Entry</th><th>Vehicles/Day</th><th>Pedestrians/Day</th><th>Total/Day</th><th>Annual</th></tr></thead><tbody>';
+  sorted.forEach(function(p,i){
+    var total=p[3]+p[4];
+    html+='<tr><td style="color:#4b5563">'+(i+1)+'</td><td>'+p[2]+'</td>'
+      +'<td style="font-family:monospace">'+(p[3]>0?p[3].toLocaleString():'—')+'</td>'
+      +'<td style="font-family:monospace">'+(p[4]>0?p[4].toLocaleString():'—')+'</td>'
+      +'<td style="font-family:monospace;color:#fff;font-weight:700">'+total.toLocaleString()+'</td>'
+      +'<td style="font-family:monospace">'+(total*365/1000000).toFixed(1)+'M</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+  html+='<div class="footer">Source: BTS Border Crossing Data Annual Release 2024/2025 · Bureau of Transportation Statistics · cbp.gov/travel</div>';
+  return html;
+}
+
+function renderCbpApprehensions(){
+  var totals=[1659206,2378944,2475669,1530234,237538];
+  var years=[2021,2022,2023,2024,2025];
+  var max=Math.max.apply(null,totals);
+  var html='<h2 class="sec-title">USBP Apprehensions FY2021–FY2025</h2>'
+    +'<p class="sec-sub">Southwest Border total apprehensions between ports of entry. FY2025 (237,538) is the lowest since 1970 — an 84% drop from FY2024. FY2022 was the all-time record at 2.38M.</p>';
+
+  html+='<div class="card"><div class="ct">National Southwest Border Total by Fiscal Year</div><div class="bchart">';
+  years.forEach(function(y,i){
+    var v=totals[i]; var pct=Math.round(v/max*100);
+    var col=y===2022||y===2023?'#ef4444':y===2025?'#22c55e':'#3b82f6';
+    html+='<div class="brow"><div class="blbl">FY'+y+'</div>'
+      +'<div class="btrack"><div class="bfill" style="width:'+pct+'%;background:'+col+'"><span>'+v.toLocaleString()+'</span></div></div>'
+      +'<div class="bval">'+Math.round(v/365)+'/day</div></div>';
+  });
+  html+='</div></div>';
+
+  html+='<div class="g2">';
+  [2024,2025].forEach(function(year){
+    var i=year-2021;
+    var sorted=CBP_SECTORS.slice().sort(function(a,b){return b.apps[i]-a.apps[i];});
+    var mx=sorted[0].apps[i];
+    html+='<div class="card"><div class="ct">FY'+year+' — By Sector</div><div class="bchart">';
+    sorted.forEach(function(s){
+      var v=s.apps[i]; var pct=Math.round(v/mx*100);
+      html+='<div class="brow"><div class="blbl">'+s.name+'</div>'
+        +'<div class="btrack"><div class="bfill" style="width:'+pct+'%;background:'+s.color+'"><span>'+v.toLocaleString()+'</span></div></div>'
+        +'<div class="bval">'+Math.round(v/365)+'/day</div></div>';
+    });
+    html+='</div></div>';
+  });
+  html+='</div>';
+  html+='<div class="footer">Source: CBP USBP Southwest Border Apprehensions by Sector · cbp.gov/newsroom/stats · FY2025 data through Nov 2025 per House Homeland Security Committee</div>';
+  return html;
+}
+
 // TAB NAVIGATION
 function showTab(tabId){
   document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active',t.dataset.tab===tabId);});
+  // Tower map special case
   document.getElementById('tab-map').style.display = tabId==='map' ? 'block' : 'none';
-  ['carriers','crossings','gaps','roaming','sources'].forEach(function(t){
-    document.getElementById('tab-'+t).className = tabId===t ? '' : 'hidden';
+  // All other tabs
+  ['carriers','crossings','gaps','roaming','cbp-heatmap','cbp-crossings','cbp-apprehensions','sources'].forEach(function(t){
+    var el=document.getElementById('tab-'+t);
+    if(el) el.className = tabId===t ? '' : 'hidden';
   });
-  var fns = {carriers:renderCarriers,crossings:renderCrossings,gaps:renderGaps,roaming:renderRoaming,sources:renderSources};
-  var cons = {carriers:'carriers-con',crossings:'crossings-con',gaps:'gaps-con',roaming:'roaming-con',sources:'sources-con'};
+  // Render content on first visit
+  var fns = {
+    carriers:renderCarriers, crossings:renderCrossings, gaps:renderGaps,
+    roaming:renderRoaming, sources:renderSources,
+    'cbp-crossings':renderCbpCrossings,
+    'cbp-apprehensions':renderCbpApprehensions,
+  };
+  var cons = {
+    carriers:'carriers-con', crossings:'crossings-con', gaps:'gaps-con',
+    roaming:'roaming-con', sources:'sources-con',
+    'cbp-crossings':'cbp-crossings-con',
+    'cbp-apprehensions':'cbp-apprehensions-con',
+  };
   if(fns[tabId] && !rendered[tabId]){
     document.getElementById(cons[tabId]).innerHTML = fns[tabId]();
     rendered[tabId] = true;
+  }
+  // CBP heat map tab — init canvas + render summary below it
+  if(tabId==='cbp-heatmap'){
+    if(!cbpCanvas) { initCbpCanvas(); }
+    else { drawCbpHeatmap(); }
+    if(!rendered['cbp-heatmap']){
+      document.getElementById('cbp-heatmap-con').innerHTML = renderCbpHeatmapContent();
+      rendered['cbp-heatmap'] = true;
+    }
   }
   if(tabId==='map') drawMap();
 }
@@ -803,6 +1160,5 @@ document.addEventListener('DOMContentLoaded', function(){
   initCanvas();
 });
 </script>
-
 </body>
 </html>
